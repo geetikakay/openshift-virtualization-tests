@@ -6,6 +6,7 @@ import pytest
 import yaml
 from ocp_resources.data_source import DataSource
 from ocp_resources.datavolume import DataVolume
+from ocp_resources.image_digest_mirror_set import ImageDigestMirrorSet
 from ocp_resources.pipeline import Pipeline
 from ocp_resources.pipeline_run import PipelineRun
 from ocp_resources.resource import ResourceEditor
@@ -25,7 +26,6 @@ from tests.infrastructure.tekton.utils import (
 )
 from utilities.artifactory import get_artifactory_config_map, get_artifactory_secret
 from utilities.constants import (
-    BREW_REGISTERY_SOURCE,
     OS_FLAVOR_FEDORA,
     TEKTON_AVAILABLE_PIPELINEREF,
     TEKTON_AVAILABLE_TASKS,
@@ -115,12 +115,26 @@ def csv_instance(csv_scope_session):
 
 
 @pytest.fixture(scope="session")
-def extracted_tekton_test_image(csv_instance):
-    annotation = csv_instance.metadata.annotations.get("test-images-nvrs", "")
-    for image in annotation.split(","):
+def tekton_test_image_name_and_digest(csv_scope_session):
+    for image in csv_scope_session.instance.metadata.annotations["test-images-nvrs"].split(","):
         if KUBEVIRT_TEKTON_AVAILABLE_TASKS_TEST in image:
-            return f"{BREW_REGISTERY_SOURCE}/rh-osbs/container-native-virtualization-{image.strip()}"
-    raise ValueError("Tekton test image not found in CSV annotations.")
+            return image.strip()
+    raise ValueError(f"{KUBEVIRT_TEKTON_AVAILABLE_TASKS_TEST} not found in CSV 'test-images-nvrs' annotation.")
+
+
+@pytest.fixture(scope="session")
+def konflux_base_path(admin_client):
+    for idms in ImageDigestMirrorSet.get(client=admin_client):
+        for mirror_entry in idms.instance.spec.imageDigestMirrors:
+            for mirror in mirror_entry.get("mirrors", []):
+                if "konflux-builds" in mirror:
+                    return mirror.rsplit("/", 1)[0]
+    raise ValueError("Konflux mirror not found in ImageDigestMirrorSet.")
+
+
+@pytest.fixture(scope="session")
+def tekton_test_image(tekton_test_image_name_and_digest, konflux_base_path):
+    return f"{konflux_base_path}/{tekton_test_image_name_and_digest}"
 
 
 @pytest.fixture(scope="session")
@@ -132,11 +146,11 @@ def extracted_virtio_image_container(csv_instance):
 
 
 @pytest.fixture(scope="session")
-def extracted_kubevirt_tekton_resources(tekton_manifests_dir, extracted_tekton_test_image, generated_pulled_secret):
+def extracted_kubevirt_tekton_resources(tekton_manifests_dir, tekton_test_image, generated_pulled_secret):
     run_command(
         command=shlex.split(
             f"oc image extract --registry-config={generated_pulled_secret} "
-            f"--path release/*:{tekton_manifests_dir} {extracted_tekton_test_image}"
+            f"--path release/*:{tekton_manifests_dir} {tekton_test_image}"
         )
     )
 
