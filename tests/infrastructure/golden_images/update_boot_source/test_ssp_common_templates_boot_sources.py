@@ -66,7 +66,7 @@ def auto_update_boot_source_vm(
         name=f"{existing_data_source_volume.name}-vm",
         namespace=namespace.name,
         client=unprivileged_client,
-        labels=template_labels(os=boot_source_os_from_data_source_dict),
+        labels=template_labels(os=boot_source_os_from_data_source_dict, architecture=py_config.get("cpu_arch")),
         data_source=existing_data_source_volume,
     ) as vm:
         running_vm(vm=vm)
@@ -79,7 +79,7 @@ def vm_without_boot_source(unprivileged_client, namespace, fedora_data_source):
         name=f"{fedora_data_source.name}-vm",
         namespace=namespace.name,
         client=unprivileged_client,
-        labels=template_labels(os=OS_FLAVOR_FEDORA),
+        labels=template_labels(os=OS_FLAVOR_FEDORA, architecture=py_config.get("cpu_arch")),
         data_source=fedora_data_source,
         non_existing_pvc=True,
     ) as vm:
@@ -121,6 +121,7 @@ def imported_fedora_dv(admin_client, golden_images_namespace, fedora_data_source
         yield dv
 
 
+@pytest.mark.arm64
 @pytest.mark.polarion("CNV-7586")
 def test_vm_from_auto_update_boot_source(
     auto_update_boot_source_vm,
@@ -137,6 +138,7 @@ def test_vm_from_auto_update_boot_source(
     validate_os_info_vmi_vs_linux_os(vm=auto_update_boot_source_vm)
 
 
+@pytest.mark.arm64
 @pytest.mark.polarion("CNV-7565")
 @pytest.mark.s390x
 def test_common_templates_boot_source_reference(base_templates):
@@ -150,6 +152,7 @@ def test_common_templates_boot_source_reference(base_templates):
     assert not failed_templates, f"Some templates do not use {source_ref_str}, templates: {failed_templates}"
 
 
+@pytest.mark.arm64
 @pytest.mark.polarion("CNV-7535")
 def test_vm_with_uploaded_golden_image_opt_out(
     admin_client,

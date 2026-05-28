@@ -11,6 +11,7 @@ from utilities.constants import (
     RHEL8_PREFERENCE,
     RHEL9_PREFERENCE,
     RHEL10_PREFERENCE,
+    U1_MEDIUM_STR,
     StorageClassNames,
 )
 
@@ -51,6 +52,20 @@ os_matrix = {
         "instance_type_rhel_os_list": [RHEL8_PREFERENCE, RHEL9_PREFERENCE, RHEL10_PREFERENCE],
         "instance_type_fedora_os_list": [OS_FLAVOR_FEDORA],
         "instance_type_centos_os_list": [CENTOS_STREAM9_PREFERENCE, CENTOS_STREAM10_PREFERENCE],
+        "data_import_cron_matrix": [
+            {"centos-stream9-amd64": {"instance_type": U1_MEDIUM_STR, "preference": CENTOS_STREAM9_PREFERENCE}},
+            {"centos-stream10-amd64": {"instance_type": U1_MEDIUM_STR, "preference": CENTOS_STREAM10_PREFERENCE}},
+            {"fedora-amd64": {"instance_type": U1_MEDIUM_STR, "preference": OS_FLAVOR_FEDORA}},
+            {"rhel8-amd64": {"instance_type": U1_MEDIUM_STR, "preference": RHEL8_PREFERENCE}},
+            {"rhel9-amd64": {"instance_type": U1_MEDIUM_STR, "preference": RHEL9_PREFERENCE}},
+            {"rhel10-amd64": {"instance_type": U1_MEDIUM_STR, "preference": RHEL10_PREFERENCE}},
+        ],
+        "auto_update_data_source_matrix": [
+            {"centos-stream9-amd64": {"template_os": "centos-stream9"}},
+            {"fedora-amd64": {"template_os": "fedora"}},
+            {"rhel8-amd64": {"template_os": "rhel8.4"}},
+            {"rhel9-amd64": {"template_os": "rhel9.0"}},
+        ],
     },
     ARM_64: {
         "rhel_os_list": ["rhel-9-6"],
@@ -59,6 +74,19 @@ os_matrix = {
         "instance_type_rhel_os_list": [RHEL10_PREFERENCE],
         "instance_type_fedora_os_list": [OS_FLAVOR_FEDORA],
         "instance_type_centos_os_list": [CENTOS_STREAM10_PREFERENCE],
+        "data_import_cron_matrix": [
+            {"centos-stream9-arm64": {"instance_type": U1_MEDIUM_STR, "preference": CENTOS_STREAM9_PREFERENCE}},
+            {"centos-stream10-arm64": {"instance_type": U1_MEDIUM_STR, "preference": CENTOS_STREAM10_PREFERENCE}},
+            {"fedora-arm64": {"instance_type": U1_MEDIUM_STR, "preference": "fedora.arm64"}},
+            {"rhel8-arm64": {"instance_type": U1_MEDIUM_STR, "preference": RHEL8_PREFERENCE}},
+            {"rhel9-arm64": {"instance_type": U1_MEDIUM_STR, "preference": "rhel.9.arm64"}},
+            {"rhel10-arm64": {"instance_type": U1_MEDIUM_STR, "preference": "rhel.10.arm64"}},
+        ],
+        "auto_update_data_source_matrix": [
+            {"centos-stream9-arm64": {"template_os": "centos-stream9"}},
+            {"fedora-arm64": {"template_os": "fedora"}},
+            {"rhel9-arm64": {"template_os": "rhel9.0"}},
+        ],
     },
 }
 

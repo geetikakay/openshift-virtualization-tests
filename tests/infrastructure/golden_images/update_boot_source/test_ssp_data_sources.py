@@ -40,7 +40,7 @@ TESTS_AUTO_UPDATE_BOOT_SOURCE_NAME = [*py_config["auto_update_data_source_matrix
 DUMMY_VOLUME_NAME = "dummy"
 DATA_SOURCE_MANAGED_BY_CDI_LABEL = f"{DataSource.ApiGroup.CDI_KUBEVIRT_IO}/dataImportCron"
 
-pytestmark = pytest.mark.post_upgrade
+pytestmark = [pytest.mark.post_upgrade, pytest.mark.arm64]
 
 
 @contextmanager

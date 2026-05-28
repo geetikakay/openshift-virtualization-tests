@@ -1,4 +1,5 @@
 import logging
+import re
 
 import pytest
 from kubernetes.dynamic.exceptions import UnprocessibleEntityError
@@ -31,7 +32,7 @@ from utilities.virt import VirtualMachineForTests, running_vm
 LOGGER = logging.getLogger(__name__)
 
 
-pytestmark = pytest.mark.post_upgrade
+pytestmark = [pytest.mark.post_upgrade, pytest.mark.arm64]
 
 
 @pytest.mark.polarion("CNV-12414")
@@ -44,7 +45,8 @@ def test_updated_rhel_image(golden_images_data_import_crons_scope_class, latest_
         with subtests.test(rhel_dic_name=rhel_dic.name, managed_data_source=rhel_instance_dict.spec.managedDataSource):
             managed_data_source = rhel_instance_dict.spec.managedDataSource
             assert managed_data_source, "spec.managedDataSource doesn't exists"
-            assert latest_rhel_release_versions_dict[managed_data_source] == image_reference_version
+            base_data_source = re.sub(r"-(amd64|arm64|s390x)$", "", managed_data_source)
+            assert latest_rhel_release_versions_dict[base_data_source] == image_reference_version
 
 
 class TestDataImportCronValidation:

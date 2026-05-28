@@ -32,6 +32,7 @@ from utilities.constants import (
     SUPPORTED_MULTIARCH_OPTIONS,
     TIMEOUT_2MIN,
     TIMEOUT_5MIN,
+    U1_MEDIUM_STR,
 )
 from utilities.data_collector import (
     collect_default_cnv_must_gather_with_vm_gather,
@@ -536,6 +537,53 @@ def generate_instance_type_matrix_dicts(os_dict: dict[str, Any], cpu_arch: str |
         )
 
 
+def generate_data_import_cron_matrix_dicts(os_dict: dict[str, Any], cpu_arch: str | None = None) -> None:
+    """Generate data_import_cron_matrix in py_config from instance type OS lists.
+
+    Derives DataSource names and preference names from the same OS lists used by
+    generate_instance_type_matrix_dicts.
+
+    On multiarch clusters, cpu_arch is passed to append the arch suffix to DataSource
+    names (e.g., rhel10-arm64) and preference names where applicable (e.g., rhel.10.arm64).
+    On homogeneous clusters, cpu_arch is None and no suffix is applied.
+
+    Args:
+        os_dict: Dict with OS lists (e.g., "instance_type_rhel_os_list").
+        cpu_arch: Architecture string, only set on multiarch clusters. Appends arch
+            suffix to DataSource names (always) and preference names (non-amd64 only,
+            for OSes that have arch-specific preferences).
+    """
+    data_import_cron_entries: list[dict[str, dict[str, str]]] = []
+
+    os_configs: list[tuple[str, str, bool]] = [
+        ("instance_type_rhel_os_list", "rhel", True),
+        ("instance_type_fedora_os_list", "fedora", True),
+        ("instance_type_centos_os_list", "centos.stream", False),
+    ]
+
+    for list_key, os_name, add_preference_arch_suffix in os_configs:
+        if preference_list := os_dict.get(list_key):
+            for preference in preference_list:
+                version_match = re.search(r"\d+", preference)
+                version = version_match.group() if version_match else None
+                data_source_name = f"{os_name.replace('.', '-')}{version}" if version else os_name
+                if cpu_arch:
+                    data_source_name = f"{data_source_name}-{cpu_arch}"
+
+                preference_suffix = cpu_arch if cpu_arch and cpu_arch != AMD_64 else None
+                arch_preference = (
+                    f"{preference}.{preference_suffix}"
+                    if preference_suffix and add_preference_arch_suffix
+                    else preference
+                )
+                data_import_cron_entries.append({
+                    data_source_name: {"instance_type": U1_MEDIUM_STR, "preference": arch_preference}
+                })
+
+    if data_import_cron_entries:
+        py_config["data_import_cron_matrix"] = data_import_cron_entries
+
+
 def update_latest_os_config(session_config: pytest.Config) -> None:
     """
     Update py_config with OS-related configuration based on session configuration.
@@ -613,10 +661,13 @@ def update_cpu_arch_related_config(cpu_arch_option: str) -> None:
         if py_config["cluster_type"] == MULTIARCH:
             generate_common_template_matrix_dicts(os_dict=py_config["os_matrix"][arch], cpu_arch=arch)
             generate_instance_type_matrix_dicts(os_dict=py_config["os_matrix"][arch], cpu_arch=arch)
+            py_config["data_import_cron_matrix"] = py_config["os_matrix"][arch]["data_import_cron_matrix"]
+            py_config["auto_update_data_source_matrix"] = py_config["os_matrix"][arch]["auto_update_data_source_matrix"]
         else:
             generate_common_template_matrix_dicts(os_dict=py_config)
             if py_config["cluster_type"] != AMD_64:
                 generate_instance_type_matrix_dicts(os_dict=py_config, cpu_arch=arch)
+                generate_data_import_cron_matrix_dicts(os_dict=py_config)
             else:
                 generate_instance_type_matrix_dicts(os_dict=py_config)
 

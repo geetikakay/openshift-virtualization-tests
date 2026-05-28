@@ -4,11 +4,16 @@ from ocp_resources.datavolume import DataVolume
 
 from utilities.constants import (
     ARM_64,
+    CENTOS_STREAM9_PREFERENCE,
+    CENTOS_STREAM10_PREFERENCE,
     EXPECTED_CLUSTER_INSTANCE_TYPE_LABELS,
     HPP_CAPABILITIES,
     OS_FLAVOR_FEDORA,
     PREFERENCE_STR,
+    RHEL8_PREFERENCE,
+    RHEL9_PREFERENCE,
     RHEL10_PREFERENCE,
+    U1_MEDIUM_STR,
     Images,
     StorageClassNames,
 )
@@ -52,6 +57,22 @@ centos_os_list = ["centos-stream-9"]
 
 instance_type_rhel_os_list = [RHEL10_PREFERENCE]
 instance_type_fedora_os_list = [OS_FLAVOR_FEDORA]
+instance_type_centos_os_list = [CENTOS_STREAM10_PREFERENCE]
+
+auto_update_data_source_matrix = [
+    {"centos-stream9": {"template_os": "centos-stream9"}},
+    {"fedora": {"template_os": "fedora"}},
+    {"rhel9": {"template_os": "rhel9.0"}},
+]
+
+data_import_cron_matrix = [
+    {"centos-stream9": {"instance_type": U1_MEDIUM_STR, "preference": CENTOS_STREAM9_PREFERENCE}},
+    {"centos-stream10": {"instance_type": U1_MEDIUM_STR, "preference": CENTOS_STREAM10_PREFERENCE}},
+    {"fedora": {"instance_type": U1_MEDIUM_STR, "preference": OS_FLAVOR_FEDORA}},
+    {"rhel8": {"instance_type": U1_MEDIUM_STR, "preference": RHEL8_PREFERENCE}},
+    {"rhel9": {"instance_type": U1_MEDIUM_STR, "preference": RHEL9_PREFERENCE}},
+    {"rhel10": {"instance_type": U1_MEDIUM_STR, "preference": RHEL10_PREFERENCE}},
+]
 
 for _dir in dir():
     if not config:

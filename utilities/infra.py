@@ -1147,8 +1147,9 @@ def get_node_selector_dict(node_selector):
 
 
 def get_linux_guest_agent_version(ssh_exec):
-    ssh_exec.sudo = True
-    return guest_agent_version_parser(version_string=ssh_exec.package_manager.info("qemu-guest-agent"))
+    # Avoid rrmngmnt's package_manager which relies on `which` — missing on Fedora 42+ and CentOS Stream 10+
+    rpm_output = run_ssh_commands(host=ssh_exec, commands=shlex.split("rpm -q qemu-guest-agent"))[0]
+    return guest_agent_version_parser(version_string=rpm_output)
 
 
 def get_linux_os_info(ssh_exec):

@@ -7,7 +7,17 @@ from unittest.mock import MagicMock, mock_open, patch
 import pytest
 
 import utilities.constants
-from utilities.constants import AMD_64, ARM_64, CENTOS_STREAM9_PREFERENCE, OS_FLAVOR_FEDORA, RHEL9_PREFERENCE, S390X
+from utilities.constants import (
+    AMD_64,
+    ARM_64,
+    CENTOS_STREAM9_PREFERENCE,
+    CENTOS_STREAM10_PREFERENCE,
+    OS_FLAVOR_FEDORA,
+    RHEL9_PREFERENCE,
+    RHEL10_PREFERENCE,
+    S390X,
+    U1_MEDIUM_STR,
+)
 from utilities.exceptions import MissingEnvironmentVariableError, UnsupportedCPUArchitectureError
 
 # Circular dependencies are already mocked in conftest.py
@@ -18,6 +28,7 @@ from utilities.pytest_utils import (
     deploy_run_in_progress_namespace,
     exit_pytest_execution,
     generate_common_template_matrix_dicts,
+    generate_data_import_cron_matrix_dicts,
     generate_instance_type_matrix_dicts,
     get_artifactory_server_url,
     get_base_matrix_name,
@@ -1716,6 +1727,104 @@ class TestGenerateInstanceTypeMatrixDicts:
         assert mock_py_config == {}
 
 
+class TestGenerateDataImportCronMatrixDicts:
+    """Test cases for generate_data_import_cron_matrix_dicts function"""
+
+    @patch("utilities.pytest_utils.py_config", new_callable=dict)
+    def test_generates_rhel_entries_no_arch(self, mock_py_config):
+        """Test RHEL entries generated without arch suffix on amd64"""
+        os_dict = {"instance_type_rhel_os_list": [RHEL9_PREFERENCE, RHEL10_PREFERENCE]}
+        generate_data_import_cron_matrix_dicts(os_dict=os_dict)
+
+        assert mock_py_config["data_import_cron_matrix"] == [
+            {"rhel9": {"instance_type": U1_MEDIUM_STR, "preference": RHEL9_PREFERENCE}},
+            {"rhel10": {"instance_type": U1_MEDIUM_STR, "preference": RHEL10_PREFERENCE}},
+        ]
+
+    @patch("utilities.pytest_utils.py_config", new_callable=dict)
+    def test_multiarch_arm64_adds_suffix_to_datasource_and_preference(self, mock_py_config):
+        """Test multiarch arm64: DataSource gets -arm64, preference gets .arm64"""
+        os_dict = {"instance_type_rhel_os_list": [RHEL10_PREFERENCE]}
+        generate_data_import_cron_matrix_dicts(os_dict=os_dict, cpu_arch=ARM_64)
+
+        assert mock_py_config["data_import_cron_matrix"] == [
+            {"rhel10-arm64": {"instance_type": U1_MEDIUM_STR, "preference": "rhel.10.arm64"}},
+        ]
+
+    @patch("utilities.pytest_utils.py_config", new_callable=dict)
+    def test_multiarch_amd64_adds_suffix_to_datasource_only(self, mock_py_config):
+        """Test multiarch amd64: DataSource gets -amd64, preference stays unchanged"""
+        os_dict = {"instance_type_rhel_os_list": [RHEL10_PREFERENCE]}
+        generate_data_import_cron_matrix_dicts(os_dict=os_dict, cpu_arch=AMD_64)
+
+        assert mock_py_config["data_import_cron_matrix"] == [
+            {"rhel10-amd64": {"instance_type": U1_MEDIUM_STR, "preference": RHEL10_PREFERENCE}},
+        ]
+
+    @patch("utilities.pytest_utils.py_config", new_callable=dict)
+    def test_multiarch_fedora_arm64(self, mock_py_config):
+        """Test multiarch arm64 Fedora entries"""
+        os_dict = {"instance_type_fedora_os_list": [OS_FLAVOR_FEDORA]}
+        generate_data_import_cron_matrix_dicts(os_dict=os_dict, cpu_arch=ARM_64)
+
+        assert mock_py_config["data_import_cron_matrix"] == [
+            {"fedora-arm64": {"instance_type": U1_MEDIUM_STR, "preference": "fedora.arm64"}},
+        ]
+
+    @patch("utilities.pytest_utils.py_config", new_callable=dict)
+    def test_multiarch_centos_no_preference_arch_suffix(self, mock_py_config):
+        """Test multiarch: CentOS gets DataSource arch suffix but NOT preference suffix"""
+        os_dict = {"instance_type_centos_os_list": [CENTOS_STREAM10_PREFERENCE]}
+        generate_data_import_cron_matrix_dicts(os_dict=os_dict, cpu_arch=ARM_64)
+
+        assert mock_py_config["data_import_cron_matrix"] == [
+            {"centos-stream10-arm64": {"instance_type": U1_MEDIUM_STR, "preference": CENTOS_STREAM10_PREFERENCE}},
+        ]
+
+    @patch("utilities.pytest_utils.py_config", new_callable=dict)
+    def test_multiarch_all_os_entries_combined(self, mock_py_config):
+        """Test multiarch arm64: all OS types generated together"""
+        os_dict = {
+            "instance_type_rhel_os_list": [RHEL10_PREFERENCE],
+            "instance_type_fedora_os_list": [OS_FLAVOR_FEDORA],
+            "instance_type_centos_os_list": [CENTOS_STREAM10_PREFERENCE],
+        }
+        generate_data_import_cron_matrix_dicts(os_dict=os_dict, cpu_arch=ARM_64)
+
+        assert mock_py_config["data_import_cron_matrix"] == [
+            {"rhel10-arm64": {"instance_type": U1_MEDIUM_STR, "preference": "rhel.10.arm64"}},
+            {"fedora-arm64": {"instance_type": U1_MEDIUM_STR, "preference": "fedora.arm64"}},
+            {"centos-stream10-arm64": {"instance_type": U1_MEDIUM_STR, "preference": CENTOS_STREAM10_PREFERENCE}},
+        ]
+
+    @patch("utilities.pytest_utils.py_config", new_callable=dict)
+    def test_homogeneous_arm64_no_suffix(self, mock_py_config):
+        """Test homogeneous arm64: no suffix on DataSource or preference (cpu_arch not passed)"""
+        os_dict = {"instance_type_rhel_os_list": [RHEL10_PREFERENCE]}
+        generate_data_import_cron_matrix_dicts(os_dict=os_dict)
+
+        assert mock_py_config["data_import_cron_matrix"] == [
+            {"rhel10": {"instance_type": U1_MEDIUM_STR, "preference": RHEL10_PREFERENCE}},
+        ]
+
+    @patch("utilities.pytest_utils.py_config", new_callable=dict)
+    def test_empty_os_dict_does_not_set_matrix(self, mock_py_config):
+        """Test that empty os_dict does not create data_import_cron_matrix"""
+        generate_data_import_cron_matrix_dicts(os_dict={})
+
+        assert "data_import_cron_matrix" not in mock_py_config
+
+    @patch("utilities.pytest_utils.py_config", new_callable=dict)
+    def test_multiarch_s390x_entries(self, mock_py_config):
+        """Test multiarch s390x: DataSource and preference get suffix"""
+        os_dict = {"instance_type_rhel_os_list": [RHEL10_PREFERENCE]}
+        generate_data_import_cron_matrix_dicts(os_dict=os_dict, cpu_arch=S390X)
+
+        assert mock_py_config["data_import_cron_matrix"] == [
+            {"rhel10-s390x": {"instance_type": U1_MEDIUM_STR, "preference": "rhel.10.s390x"}},
+        ]
+
+
 class TestUpdateLatestOsConfig:
     """Test cases for update_latest_os_config function"""
 
@@ -1868,6 +1977,7 @@ class TestUpdateLatestOsConfig:
 class TestUpdateCpuArchRelatedConfig:
     """Test cases for update_cpu_arch_related_config function"""
 
+    @patch("utilities.pytest_utils.generate_data_import_cron_matrix_dicts")
     @patch("utilities.pytest_utils.generate_instance_type_matrix_dicts")
     @patch("utilities.pytest_utils.generate_common_template_matrix_dicts")
     @patch("utilities.pytest_utils.get_cluster_architecture", return_value={"amd64"})
@@ -1881,6 +1991,7 @@ class TestUpdateCpuArchRelatedConfig:
         mock_get_cluster_arch,
         mock_generate_common,
         mock_generate_instance,
+        mock_generate_dic,
     ):
         """Test that multi-arch option logs warning and skips OS matrix generation"""
         with patch("utilities.pytest_utils.py_config", {"cluster_type": "multiarch"}) as mock_py_config:
@@ -1890,8 +2001,10 @@ class TestUpdateCpuArchRelatedConfig:
             mock_logger.warning.assert_called_once_with("OS matrix generation is not supported for multi-arch runs!")
             mock_generate_common.assert_not_called()
             mock_generate_instance.assert_not_called()
+            mock_generate_dic.assert_not_called()
             assert "cpu_arch" not in mock_py_config
 
+    @patch("utilities.pytest_utils.generate_data_import_cron_matrix_dicts")
     @patch("utilities.pytest_utils.generate_instance_type_matrix_dicts")
     @patch("utilities.pytest_utils.generate_common_template_matrix_dicts")
     @patch("utilities.pytest_utils.get_cluster_architecture", return_value={"amd64"})
@@ -1904,6 +2017,7 @@ class TestUpdateCpuArchRelatedConfig:
         mock_get_cluster_arch,
         mock_generate_common,
         mock_generate_instance,
+        mock_generate_dic,
     ):
         """Test that single arch option sets cpu_arch in py_config"""
         mock_py_config = {"cluster_type": "amd64"}
@@ -1919,7 +2033,9 @@ class TestUpdateCpuArchRelatedConfig:
             assert utilities.constants.Images is mock_arch_images.AMD64
             mock_generate_common.assert_called_once_with(os_dict=mock_py_config)
             mock_generate_instance.assert_called_once_with(os_dict=mock_py_config)
+            mock_generate_dic.assert_not_called()
 
+    @patch("utilities.pytest_utils.generate_data_import_cron_matrix_dicts")
     @patch("utilities.pytest_utils.generate_instance_type_matrix_dicts")
     @patch("utilities.pytest_utils.generate_common_template_matrix_dicts")
     @patch("utilities.pytest_utils.get_cluster_architecture", return_value={"arm64"})
@@ -1932,6 +2048,7 @@ class TestUpdateCpuArchRelatedConfig:
         mock_get_cluster_arch,
         mock_generate_common,
         mock_generate_instance,
+        mock_generate_dic,
     ):
         """Test that empty cpu_arch_option uses cluster architecture"""
         mock_py_config = {"cluster_type": "arm64"}
@@ -1948,7 +2065,9 @@ class TestUpdateCpuArchRelatedConfig:
             assert utilities.constants.Images is mock_arch_images.ARM64
             mock_generate_common.assert_called_once_with(os_dict=mock_py_config)
             mock_generate_instance.assert_called_once_with(os_dict=mock_py_config, cpu_arch="arm64")
+            mock_generate_dic.assert_called_once_with(os_dict=mock_py_config)
 
+    @patch("utilities.pytest_utils.generate_data_import_cron_matrix_dicts")
     @patch("utilities.pytest_utils.generate_instance_type_matrix_dicts")
     @patch("utilities.pytest_utils.generate_common_template_matrix_dicts")
     @patch("utilities.pytest_utils.get_cluster_architecture", return_value={"amd64", "arm64"})
@@ -1962,9 +2081,16 @@ class TestUpdateCpuArchRelatedConfig:
         mock_get_cluster_arch,
         mock_generate_common,
         mock_generate_instance,
+        mock_generate_dic,
     ):
         """Test that MULTIARCH cluster type uses os_matrix[arch] for OS matrix generation"""
-        os_matrix_amd64 = {"rhel_os_list": ["rhel-9-6"]}
+        dic_matrix = [{"rhel10-amd64": {"instance_type": "u1.medium", "preference": "rhel.10"}}]
+        auto_update_matrix = [{"centos-stream9-amd64": {"template_os": "centos-stream9"}}]
+        os_matrix_amd64 = {
+            "rhel_os_list": ["rhel-9-6"],
+            "data_import_cron_matrix": dic_matrix,
+            "auto_update_data_source_matrix": auto_update_matrix,
+        }
         mock_py_config = {
             "cluster_type": "multiarch",
             "os_matrix": {"amd64": os_matrix_amd64, "arm64": {"rhel_os_list": ["rhel-9-5"]}},
@@ -1981,7 +2107,11 @@ class TestUpdateCpuArchRelatedConfig:
             assert utilities.constants.Images is mock_arch_images.AMD64
             mock_generate_common.assert_called_once_with(os_dict=os_matrix_amd64, cpu_arch="amd64")
             mock_generate_instance.assert_called_once_with(os_dict=os_matrix_amd64, cpu_arch="amd64")
+            mock_generate_dic.assert_not_called()
+            assert mock_py_config["data_import_cron_matrix"] == dic_matrix
+            assert mock_py_config["auto_update_data_source_matrix"] == auto_update_matrix
 
+    @patch("utilities.pytest_utils.generate_data_import_cron_matrix_dicts")
     @patch("utilities.pytest_utils.generate_instance_type_matrix_dicts")
     @patch("utilities.pytest_utils.generate_common_template_matrix_dicts")
     @patch("utilities.pytest_utils.get_cluster_architecture", return_value={"s390x"})
@@ -1994,6 +2124,7 @@ class TestUpdateCpuArchRelatedConfig:
         mock_get_cluster_arch,
         mock_generate_common,
         mock_generate_instance,
+        mock_generate_dic,
     ):
         """Test that s390x architecture sets Images constant correctly"""
         mock_py_config = {"cluster_type": "s390x"}
@@ -2011,7 +2142,9 @@ class TestUpdateCpuArchRelatedConfig:
             assert utilities.constants.Images is mock_s390x_images
             mock_generate_common.assert_called_once_with(os_dict=mock_py_config)
             mock_generate_instance.assert_called_once_with(os_dict=mock_py_config, cpu_arch="s390x")
+            mock_generate_dic.assert_called_once_with(os_dict=mock_py_config)
 
+    @patch("utilities.pytest_utils.generate_data_import_cron_matrix_dicts")
     @patch("utilities.pytest_utils.generate_instance_type_matrix_dicts")
     @patch("utilities.pytest_utils.generate_common_template_matrix_dicts")
     @patch("utilities.pytest_utils.get_cluster_architecture", return_value={"amd64"})
@@ -2024,6 +2157,7 @@ class TestUpdateCpuArchRelatedConfig:
         mock_get_cluster_arch,
         mock_generate_common,
         mock_generate_instance,
+        mock_generate_dic,
     ):
         """Test that arm64 option sets Images constant correctly"""
         mock_py_config = {"cluster_type": "amd64"}
@@ -2040,6 +2174,7 @@ class TestUpdateCpuArchRelatedConfig:
             assert mock_py_config["cpu_arch"] == "arm64"
             assert utilities.constants.Images is mock_arm64_images
 
+    @patch("utilities.pytest_utils.generate_data_import_cron_matrix_dicts")
     @patch("utilities.pytest_utils.generate_instance_type_matrix_dicts")
     @patch("utilities.pytest_utils.generate_common_template_matrix_dicts")
     @patch("utilities.pytest_utils.get_cluster_architecture", return_value={"amd64"})
@@ -2052,6 +2187,7 @@ class TestUpdateCpuArchRelatedConfig:
         mock_get_cluster_arch,
         mock_generate_common,
         mock_generate_instance,
+        mock_generate_dic,
     ):
         """Test that AMD64 cluster uses py_config without cpu_arch for instance type"""
         mock_py_config = {"cluster_type": "amd64", "rhel_os_list": ["rhel-9-6"]}
@@ -2066,7 +2202,9 @@ class TestUpdateCpuArchRelatedConfig:
             assert utilities.constants.Images is mock_arch_images.AMD64
             mock_generate_common.assert_called_once_with(os_dict=mock_py_config)
             mock_generate_instance.assert_called_once_with(os_dict=mock_py_config)
+            mock_generate_dic.assert_not_called()
 
+    @patch("utilities.pytest_utils.generate_data_import_cron_matrix_dicts")
     @patch("utilities.pytest_utils.generate_instance_type_matrix_dicts")
     @patch("utilities.pytest_utils.generate_common_template_matrix_dicts")
     @patch("utilities.pytest_utils.get_cluster_architecture", return_value={"arm64"})
@@ -2079,6 +2217,7 @@ class TestUpdateCpuArchRelatedConfig:
         mock_get_cluster_arch,
         mock_generate_common,
         mock_generate_instance,
+        mock_generate_dic,
     ):
         """Test that non-AMD64 cluster uses py_config with cpu_arch for instance type"""
         mock_py_config = {"cluster_type": "arm64", "rhel_os_list": ["rhel-9-6"]}
@@ -2093,7 +2232,9 @@ class TestUpdateCpuArchRelatedConfig:
             assert utilities.constants.Images is mock_arch_images.ARM64
             mock_generate_common.assert_called_once_with(os_dict=mock_py_config)
             mock_generate_instance.assert_called_once_with(os_dict=mock_py_config, cpu_arch="arm64")
+            mock_generate_dic.assert_called_once_with(os_dict=mock_py_config)
 
+    @patch("utilities.pytest_utils.generate_data_import_cron_matrix_dicts")
     @patch("utilities.pytest_utils.generate_instance_type_matrix_dicts")
     @patch("utilities.pytest_utils.generate_common_template_matrix_dicts")
     @patch("utilities.pytest_utils.get_cluster_architecture", return_value={"amd64", "arm64", "s390x"})
@@ -2106,6 +2247,7 @@ class TestUpdateCpuArchRelatedConfig:
         mock_get_cluster_arch,
         mock_generate_common,
         mock_generate_instance,
+        mock_generate_dic,
     ):
         """Test that three-arch option logs warning"""
         mock_py_config = {"cluster_type": "multiarch"}
@@ -2115,8 +2257,10 @@ class TestUpdateCpuArchRelatedConfig:
             mock_logger.warning.assert_called_once_with("OS matrix generation is not supported for multi-arch runs!")
             mock_generate_common.assert_not_called()
             mock_generate_instance.assert_not_called()
+            mock_generate_dic.assert_not_called()
             assert "cpu_arch" not in mock_py_config
 
+    @patch("utilities.pytest_utils.generate_data_import_cron_matrix_dicts")
     @patch("utilities.pytest_utils.generate_instance_type_matrix_dicts")
     @patch("utilities.pytest_utils.generate_common_template_matrix_dicts")
     @patch("utilities.pytest_utils.get_cluster_architecture", return_value={"amd64", "arm64"})
@@ -2130,9 +2274,16 @@ class TestUpdateCpuArchRelatedConfig:
         mock_get_cluster_arch,
         mock_generate_common,
         mock_generate_instance,
+        mock_generate_dic,
     ):
         """Test that MULTIARCH cluster with arm64 option uses os_matrix[arm64]"""
-        os_matrix_arm64 = {"rhel_os_list": ["rhel-9-5"]}
+        dic_matrix = [{"rhel10-arm64": {"instance_type": "u1.medium", "preference": "rhel.10.arm64"}}]
+        auto_update_matrix = [{"fedora-arm64": {"template_os": "fedora"}}]
+        os_matrix_arm64 = {
+            "rhel_os_list": ["rhel-9-5"],
+            "data_import_cron_matrix": dic_matrix,
+            "auto_update_data_source_matrix": auto_update_matrix,
+        }
         mock_py_config = {
             "cluster_type": "multiarch",
             "os_matrix": {"amd64": {"rhel_os_list": ["rhel-9-6"]}, "arm64": os_matrix_arm64},
@@ -2149,7 +2300,11 @@ class TestUpdateCpuArchRelatedConfig:
             assert utilities.constants.Images is mock_arch_images.ARM64
             mock_generate_common.assert_called_once_with(os_dict=os_matrix_arm64, cpu_arch="arm64")
             mock_generate_instance.assert_called_once_with(os_dict=os_matrix_arm64, cpu_arch="arm64")
+            mock_generate_dic.assert_not_called()
+            assert mock_py_config["data_import_cron_matrix"] == dic_matrix
+            assert mock_py_config["auto_update_data_source_matrix"] == auto_update_matrix
 
+    @patch("utilities.pytest_utils.generate_data_import_cron_matrix_dicts")
     @patch("utilities.pytest_utils.generate_instance_type_matrix_dicts")
     @patch("utilities.pytest_utils.generate_common_template_matrix_dicts")
     @patch("utilities.pytest_utils.get_cluster_architecture", return_value={"amd64"})
@@ -2162,6 +2317,7 @@ class TestUpdateCpuArchRelatedConfig:
         mock_get_cluster_arch,
         mock_generate_common,
         mock_generate_instance,
+        mock_generate_dic,
     ):
         """Test that validate_cpu_arch_params is called before any other processing"""
         mock_validate.side_effect = Exception("Validation error")
@@ -2174,6 +2330,7 @@ class TestUpdateCpuArchRelatedConfig:
             mock_get_cluster_arch.assert_not_called()
             mock_generate_common.assert_not_called()
             mock_generate_instance.assert_not_called()
+            mock_generate_dic.assert_not_called()
 
 
 class TestAssertIncrementalClassesFullyCollected:
