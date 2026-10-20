@@ -14,7 +14,7 @@ from contextlib import contextmanager
 from copy import deepcopy
 from functools import cache
 from json import JSONDecodeError
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import jinja2
 import pexpect
@@ -3043,23 +3043,16 @@ def validate_virtctl_guest_agent_after_guest_reboot(vm: VirtualMachineForTests, 
 
 
 def guest_reboot(vm: VirtualMachineForTests, os_type: str) -> None:
-    commands = {
-        "stop-user-agent": {
-            LINUX_STR: "sudo systemctl stop qemu-guest-agent",
-            OS_FLAVOR_WINDOWS: "powershell -command \"Stop-Service -Name 'QEMU-GA'\"",
-        },
-        "reboot": {
-            LINUX_STR: "sudo reboot",
-            OS_FLAVOR_WINDOWS: 'powershell -command "Restart-Computer -Force"',
-        },
+    reboot_commands = {
+        LINUX_STR: "sudo reboot",
+        OS_FLAVOR_WINDOWS: 'powershell -command "Restart-Computer -Force"',
     }
 
     LOGGER.info("Stopping user agent")
-    run_os_command(vm=vm, command=commands["stop-user-agent"][os_type])
-    wait_for_user_agent_down(vm=vm, timeout=TIMEOUT_2MIN)
+    manage_qemu_guest_agent(vm=vm, action="stop", os_type=os_type)
 
     LOGGER.info(f"Rebooting {vm.name} from guest")
-    run_os_command(vm=vm, command=commands["reboot"][os_type])
+    run_os_command(vm=vm, command=reboot_commands[os_type])
 
 
 def run_os_command(vm: VirtualMachineForTests, command: str) -> str | None:
@@ -3089,6 +3082,35 @@ def wait_for_user_agent_down(vm: VirtualMachineForTests, timeout: int) -> None:
         # Consider agent "down" when condition is absent OR explicitly not True
         if not sample or all(condition.get("status") != "True" for condition in sample):
             break
+
+
+def manage_qemu_guest_agent(
+    vm: VirtualMachineForTests,
+    action: Literal["start", "stop"],
+    os_type: str = LINUX_STR,
+) -> None:
+    """Start or stop qemu-guest-agent in the guest and wait for connect or disconnect.
+
+    Args:
+        vm: VM whose guest agent to manage.
+        action: Guest agent service action.
+        os_type: Guest OS family used to choose the in-guest command.
+    """
+    commands = {
+        "stop": {
+            LINUX_STR: "sudo systemctl stop qemu-guest-agent",
+            OS_FLAVOR_WINDOWS: "powershell -command \"Stop-Service -Name 'QEMU-GA'\"",
+        },
+        "start": {
+            LINUX_STR: "sudo systemctl start qemu-guest-agent",
+            OS_FLAVOR_WINDOWS: "powershell -command \"Start-Service -Name 'QEMU-GA'\"",
+        },
+    }
+    run_os_command(vm=vm, command=commands[action][os_type])
+    if action == "start":
+        vm.wait_for_agent_connected()
+    else:
+        wait_for_user_agent_down(vm=vm, timeout=TIMEOUT_2MIN)
 
 
 def get_virt_handler_pods(client: DynamicClient, namespace: Namespace) -> list[Pod]:
